@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=61.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tandem-buddy-app"
+version = "0.1.0"
+description = "Blob"
+authors = [
+    {name = "Your Name", email = "you@example.com"},
+]
+license = {text = "MIT"}
+readme = "README.md"
+requires-python = ">=3.11" # Specify your minimum Python version
+
+# Core dependencies (equivalent to [tool.poetry.dependencies])
+dependencies = [
+    "gradio>=6.0",
+    "numpy>=1.24",
+    "soundfile>=0.12",
+    "librosa>=0.10",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",       # Testing framework
+]
