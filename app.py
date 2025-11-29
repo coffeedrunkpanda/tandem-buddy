@@ -1,158 +1,274 @@
-import base64
 import os
-import mimetypes
+import wave
+import tempfile
+# import base64
+# import mimetypes
+# import librosa
+
+import numpy as np
 import gradio as gr
 import soundfile as sf
-import numpy as np
-import librosa
 
-"""
-Audio-only chat demo
-
-This creates a `gr.Chatbot` and a single `gr.Audio` recorder/upload control.
-When the user records or uploads audio and clicks Send, the app:
- - loads the audio (resampling/normalizing helpers included)
- - produces a placeholder transcription (replace `transcribe()` with a real ASR)
- - appends a single user bubble containing the audio player and the transcription below it
- - appends an assistant response bubble (placeholder)
-
-Notes:
- - Uses data URIs to embed the uploaded audio into the chat bubble so it appears inline.
- - For production or long audio, consider streaming, storing files, or returning the filepath
-   instead of embedding large base64 payloads.
-
-Dependencies:
-  gradio numpy soundfile librosa
-
-Replace `transcribe()` with your ASR of choice (whisper/faster-whisper, cloud API, etc.).
+# TODO: fix message counter for user and assistant messages
+# Custom CSS for layout
+css = """
+.transcription-panel {
+    border-left: 2px solid #e0e0e0;
+    padding-left: 20px;
+    max-height: 600px;
+    overflow-y: auto;
+}
+.main-chat {
+    padding-right: 20px;
+}
 """
 
+empty_transcription_message = "## 📝 Transcriptions\n\nNo messages yet."
 
-def guess_mime_type(path: str) -> str:
-    mime, _ = mimetypes.guess_type(path)
-    return mime or "audio/wav"
+def transcribe_audio(audio):
+    """Transcribe audio to text"""
+    if audio is None:
+        return None
+    
+    # Simulate transcription (replace with actual speech-to-text)
+    sample_rate, audio_data = audio
+    duration = len(audio_data) / sample_rate
+    
+    return f"User said: Hello, this is my message! (Duration: {duration:.1f}s)"
+
+def save_audio_to_file(audio):
+    """Save audio numpy array to a temporary WAV file"""
+    if audio is None:
+        return None
+    
+    sample_rate, audio_data = audio
+    
+    # Create temp file
+    temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".wav")
+    
+    # Normalize audio data to int16
+    if audio_data.dtype == np.float32 or audio_data.dtype == np.float64:
+        audio_data = (audio_data * 32767).astype(np.int16)
+    
+    # Write WAV file
+    with wave.open(temp_file.name, 'wb') as wav_file:
+        wav_file.setnchannels(1)
+        wav_file.setsampwidth(2)
+        wav_file.setframerate(sample_rate)
+        wav_file.writeframes(audio_data.tobytes())
+    
+    return temp_file.name
+
+def generate_audio_response(text):
+    """Generate audio response from text"""
+    # Create a simple sine wave as placeholder
+    sample_rate = 22050
+    duration = 2.0
+    t = np.linspace(0, duration, int(sample_rate * duration))
+    audio_data = (np.sin(2 * np.pi * 440 * t) * 0.3 * 32767).astype(np.int16)
+    
+    # Save to temp file
+    temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".wav")
+    
+    with wave.open(temp_file.name, 'wb') as wav_file:
+        wav_file.setnchannels(1)
+        wav_file.setsampwidth(2)
+        wav_file.setframerate(sample_rate)
+        wav_file.writeframes(audio_data.tobytes())
+    
+    return temp_file.name
+
+def generate_response_text(user_transcription):
+    """Generate text response"""
+    return f"Assistant: I heard you say '{user_transcription}'. Here's my response!"
+
+def process_audio_message(audio, history, transcriptions):
+    """Process user audio: save and add to chat"""
+    if audio is None:
+        return history, None, transcriptions
+    
+    # Save audio to file
+    audio_file = save_audio_to_file(audio)
+    
+    # Transcribe user audio
+    transcription = transcribe_audio(audio)
+    
+    # Add user message with audio
+    history = history or []
+    message_index = len(history)
+
+    # Add identifier to the message
+    history.append({
+    "role": "user",
+    "content": f"🎤 User Audio Message #{message_index + 1}"
+    })
+
+    history.append({
+        "role": "user",
+        "content": {
+            "path": audio_file,
+        }
+    })
+    
 
 
-def file_to_data_uri(path: str) -> str:
-    """Read a local file and return a data URI suitable for an <audio> tag."""
-    with open(path, "rb") as f:
-        data = f.read()
-    b64 = base64.b64encode(data).decode("ascii")
-    mime = guess_mime_type(path)
-    return f"data:{mime};base64,{b64}"
+    # Store transcription
+    transcriptions = transcriptions or []
+    transcriptions.append({
+        "role": "user",
+        "text": transcription,
+        "index": message_index
+    })
+    
+    return history, None, transcriptions
+
+def generate_response(history, transcriptions):
+    """Generate bot audio response"""
+    if not history or not transcriptions:
+        return history, transcriptions
+    
+    # Get user's last transcription
+    user_transcription = transcriptions[-1]["text"]
+    
+    # Generate response text
+    response_text = generate_response_text(user_transcription)
+    
+    # Generate audio response
+    response_audio_file = generate_audio_response(response_text)
+    
+    message_index = len(history)
+    
+    # Add identifier to the message
+    history.append({
+    "role": "assistant",
+    "content": f"🤖 Assistant Audio Message #{message_index + 1}"
+    })
+
+    history.append({
+        "role": "assistant",
+        "content": {
+            "path": response_audio_file,
+        }
+    })
+    
+    # Store assistant transcription
+    transcriptions.append({
+        "role": "assistant",
+        "text": response_text,
+        "index": message_index
+    })
+    
+    return history, transcriptions
+
+def format_transcriptions(transcriptions, show_transcriptions):
+    """Format transcriptions for display"""
+    if not show_transcriptions or not transcriptions:
+        return ""
+    
+    formatted = "## 📝 Transcriptions\n\n"
+    for i, trans in enumerate(transcriptions):
+        role_emoji = "🎤" if trans["role"] == "user" else "🤖"
+        role_name = "User" if trans["role"] == "user" else "Assistant"
+        formatted += f"**{role_emoji} {role_name} Audio Message #{trans['index'] + 1}**\n\n"
+        formatted += f"{trans['text']}\n\n"
+        formatted += "---\n\n"
+    
+    return formatted
 
 
-def load_audio_for_processing(path: str, target_sr: int = 16000):
-    """Load audio from `path`, convert to mono and resample to `target_sr`.
-    Returns (np.ndarray, sr).
-    """
-    data, sr = sf.read(path, dtype="float32")
-    if data.ndim > 1:
-        data = np.mean(data, axis=1)
-    if sr != target_sr:
-        data = librosa.resample(data, orig_sr=sr, target_sr=target_sr)
-        sr = target_sr
-    peak = np.max(np.abs(data)) if data.size else 1.0
-    if peak > 0:
-        data = data / max(peak, 1e-9)
-    return data, sr
+with gr.Blocks(css=css) as demo:
+    gr.Markdown("# 🎙️ Audio Chat with Transcriptions Panel")
+    
+    # Store transcriptions in state
+    transcriptions_state = gr.State([])
+    show_transcriptions_state = gr.State(False)
+    
+    with gr.Row():
+        # Main chat area
+        with gr.Column(scale=2, elem_classes="main-chat") as chat_col:
+            chatbot = gr.Chatbot(
+                label="Conversation",
+                type="messages",
+                height=500
+            )
 
+            # TODO: investigate using type="filepath" for audio input
+            with gr.Row():
+                audio_input = gr.Audio(
+                    sources=["microphone", "upload"],
+                    type="numpy",
+                    label="Record or Upload Audio"
+                )
+            
+            with gr.Row():
+                send_btn = gr.Button("Send Audio", variant="primary", scale=1)
+                clear_btn = gr.Button("Clear Chat", scale=1)
+                transcribe_toggle = gr.Button("Show Transcriptions", scale=1)
+                # TODO: Add "Feedback" button later
+        
+        # Transcription panel (initially hidden)
+        with gr.Column(scale=1, visible=False, elem_classes="transcription-panel") as transcription_col:
+            transcription_display = gr.Markdown(
+                value=empty_transcription_message,
+                label="Transcriptions"
+            )
 
-def transcribe(path: str) -> str:
-    """Placeholder transcription function.
+    # Toggle transcription panel visibility
+    def toggle_transcriptions(show_state, transcriptions):
+        new_state = not show_state
+        button_text = "Hide Transcriptions" if new_state else "Show Transcriptions"
+        transcription_text = format_transcriptions(transcriptions, new_state)
+        if not transcription_text:
+            transcription_text = empty_transcription_message
+        
+        return (
+            new_state,
+            gr.update(visible=new_state),
+            button_text,
+            transcription_text
+        )
 
-    Replace this with a real ASR (whisper/faster-whisper, cloud API, etc.)
-    """
-    try:
-        data, sr = load_audio_for_processing(path)
-        duration = len(data) / sr if sr else 0.0
-        # Placeholder: return a helpful debugging summary instead of real transcript
-        return f"[simulated transcription — {duration:.2f}s audio]"
-    except Exception as e:
-        return f"[transcription failure: {e}]"
-
-
-def process_audio_submit(audio_path, chat_history):
-    """Event handler for Send button.
-
-    - `audio_path` is typically a string filepath (Gradio `type='filepath'`).
-    - `chat_history` is the current list of (user, assistant) tuples for `gr.Chatbot`.
-    """
-    if not audio_path:
-        return chat_history
-
-    # Support cases where Gradio returns a dict-like object
-    if isinstance(audio_path, dict):
-        # common keys: 'name', 'file', 'path', 'tmp_path'
-        for k in ("name", "file", "path", "tmp_path"):
-            if k in audio_path and isinstance(audio_path[k], str):
-                audio_path = audio_path[k]
-                break
-
-    if not isinstance(audio_path, str) or not os.path.exists(audio_path):
-        # Nothing we can do
-        return chat_history
-
-    # Create data URI to embed audio inline in the chat bubble.
-    try:
-        audio_data_uri = file_to_data_uri(audio_path)
-    except Exception:
-        audio_data_uri = ""
-
-    # Get transcription (placeholder)
-    transcription = transcribe(audio_path)
-
-    # Build an HTML user bubble: audio player + transcription text below it
-    user_html = (
-        f"<div class=\"user-audio-bubble\">"
-        f"<audio controls src=\"{audio_data_uri}\"></audio>"
-        f"<div class=\"transcription\">{transcription}</div>"
-        f"</div>"
+    transcribe_toggle.click(
+        toggle_transcriptions,
+        inputs=[show_transcriptions_state, transcriptions_state],
+        outputs=[show_transcriptions_state, transcription_col, transcribe_toggle, transcription_display]
     )
 
-    # Generate assistant reply (placeholder). Replace with your generation logic.
-    assistant_reply = "[assistant reply generated from audio goes here]"
+    # Handle audio submission
+    def handle_audio_submit(audio, history, transcriptions, show_state):
+        if audio is None:
+            return history, None, transcriptions, format_transcriptions(transcriptions, show_state)
+        
+        # Add user audio
+        history, _, transcriptions = process_audio_message(audio, history, transcriptions)
+        # Generate bot response
+        history, transcriptions = generate_response(history, transcriptions)
+        
+        # Update transcription display
+        transcription_text = format_transcriptions(transcriptions, show_state)
+        if not transcription_text:
+            transcription_text = empty_transcription_message
+        
+        return history, None, transcriptions, transcription_text
 
-    # Append a new (user, assistant) pair to the chat history so they appear as
-    # two-bubble conversation. The user bubble contains audio + transcription.
-    # new_history = list(chat_history or []) + [(user_html, assistant_reply)]
+    send_btn.click(
+        handle_audio_submit,
+        inputs=[audio_input, chatbot, transcriptions_state, show_transcriptions_state],
+        outputs=[chatbot, audio_input, transcriptions_state, transcription_display]
+    )
 
-    # Data incompatible with messages format. Each message should be a dictionary with 'role' and 'content' keys or a ChatMessage object.
+    # Removed auto-submit on recording stop
 
-    new_history = list(chat_history or []) + [
-    {"role": "user", "content": transcription},
-    {"role": "assistant", "content": assistant_reply}
-]
-    
-    return new_history
+    # Clear chat
+    def clear_all():
+        return [], None, [], empty_transcription_message
 
+    clear_btn.click(
+        clear_all,
+        outputs=[chatbot, audio_input, transcriptions_state, transcription_display]
+    )
 
-def clear_chat():
-    return []
-
-
-css_blob = """
-.user-audio-bubble { display: block; }
-.user-audio-bubble .transcription { margin-top: 6px; color: #333; font-style: italic; }
-"""
-
-
-def main():
-    with gr.Blocks() as demo:
-        gr.Markdown("## Audio-only Chat — record or upload and click Send")
-
-        chatbot = gr.Chatbot([], type="messages" , elem_id="chatbot", label="Conversation")
-
-        with gr.Row():
-            audio_input = gr.Audio(sources=["microphone", "upload"], type="filepath", label="Record or upload audio")
-            send_btn = gr.Button("Send")
-            clear_btn = gr.Button("Clear")
-
-        send_btn.click(fn=process_audio_submit, inputs=[audio_input, chatbot], outputs=[chatbot])
-        clear_btn.click(fn=clear_chat, inputs=None, outputs=[chatbot])
-
-    demo.launch()
 
 
 if __name__ == "__main__":
-    main()
+    demo.launch()
