@@ -1,13 +1,12 @@
-import os
 import wave
 import tempfile
-# import base64
-# import mimetypes
-# import librosa
 
 import numpy as np
 import gradio as gr
-import soundfile as sf
+
+from audio_processing import AudioProcessing
+from language_partner import LanguagePartner
+
 
 # TODO: fix message counter for user and assistant messages
 # Custom CSS for layout
@@ -25,17 +24,8 @@ css = """
 
 empty_transcription_message = "## 📝 Transcriptions\n\nNo messages yet."
 
-def transcribe_audio(audio):
-    """Transcribe audio to text"""
-    if audio is None:
-        return None
-    
-    # Simulate transcription (replace with actual speech-to-text)
-    sample_rate, audio_data = audio
-    duration = len(audio_data) / sample_rate
-    
-    return f"User said: Hello, this is my message! (Duration: {duration:.1f}s)"
 
+# TODO: Fix functions below and add to audio_processing.py
 def save_audio_to_file(audio):
     """Save audio numpy array to a temporary WAV file"""
     if audio is None:
