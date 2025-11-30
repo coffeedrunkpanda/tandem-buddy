@@ -1,7 +1,6 @@
-import wave
-import tempfile
-
-import numpy as np
+import os
+import sys
+# import numpy as np
 import gradio as gr
 
 from audio_processing import AudioProcessing
@@ -24,154 +23,177 @@ css = """
 
 empty_transcription_message = "## 📝 Transcriptions\n\nNo messages yet."
 
+class IntegratedAudioChat:
+    def __init__(self):
+        self.audio_processor = AudioProcessing()
+        self.language_partner = LanguagePartner()
 
-# TODO: Fix functions below and add to audio_processing.py
-def save_audio_to_file(audio):
-    """Save audio numpy array to a temporary WAV file"""
-    if audio is None:
-        return None
-    
-    sample_rate, audio_data = audio
-    
-    # Create temp file
-    temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".wav")
-    
-    # Normalize audio data to int16
-    if audio_data.dtype == np.float32 or audio_data.dtype == np.float64:
-        audio_data = (audio_data * 32767).astype(np.int16)
-    
-    # Write WAV file
-    with wave.open(temp_file.name, 'wb') as wav_file:
-        wav_file.setnchannels(1)
-        wav_file.setsampwidth(2)
-        wav_file.setframerate(sample_rate)
-        wav_file.writeframes(audio_data.tobytes())
-    
-    return temp_file.name
+        self._message_turn_counter = 1
 
-def generate_audio_response(text):
-    """Generate audio response from text"""
-    # Create a simple sine wave as placeholder
-    sample_rate = 22050
-    duration = 2.0
-    t = np.linspace(0, duration, int(sample_rate * duration))
-    audio_data = (np.sin(2 * np.pi * 440 * t) * 0.3 * 32767).astype(np.int16)
-    
-    # Save to temp file
-    temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".wav")
-    
-    with wave.open(temp_file.name, 'wb') as wav_file:
-        wav_file.setnchannels(1)
-        wav_file.setsampwidth(2)
-        wav_file.setframerate(sample_rate)
-        wav_file.writeframes(audio_data.tobytes())
-    
-    return temp_file.name
+        if os.path.isdir("temp_data") is False:
+            os.makedirs("temp_data")
 
-def generate_response_text(user_transcription):
-    """Generate text response"""
-    return f"Assistant: I heard you say '{user_transcription}'. Here's my response!"
+        self.temp_dir = "temp_data"
 
-def process_audio_message(audio, history, transcriptions):
-    """Process user audio: save and add to chat"""
-    if audio is None:
-        return history, None, transcriptions
-    
-    # Save audio to file
-    audio_file = save_audio_to_file(audio)
-    
-    # Transcribe user audio
-    transcription = transcribe_audio(audio)
-    
-    # Add user message with audio
-    history = history or []
-    message_index = len(history)
+        self._history = []
 
-    # Add identifier to the message
-    history.append({
-    "role": "user",
-    "content": f"🎤 User Audio Message #{message_index + 1}"
-    })
+        # Transcriptions 
+        self._transcriptions = []
 
-    history.append({
+        # Toggle transcriptions state? 
+        self.transcriptions_state = gr.State([])
+        self.show_transcriptions_state = gr.State(False)
+            
+
+    def _process_user_audio_message(self, audio):
+        """Process user audio: save audio, get transcription and add to chat"""
+
+        if audio is None:
+            return None
+        
+        # save user audio in temp file
+        filename = f"{self.temp_dir}/user_audio_{self._message_turn_counter}.mp3"
+        self.audio_processor.save_audio_to_file(audio_data=audio,
+                                                filename=filename)
+
+        # obtain answer from language partner
+        transcription = self.audio_processor.speech_to_text(audio)
+    
+        # Add identifier to the message
+        self._history.append({
         "role": "user",
-        "content": {
-            "path": audio_file,
-        }
-    })
-    
+        "content": f"🎤 User Audio Message #{self._message_turn_counter}"
+        })
 
+        self._history.append({
+            "role": "user",
+            "content": {
+                "path": filename,
+            }
+        })
+        
+        # Store transcription
+        self._transcriptions.append({
+            "role": "user",
+            "text": transcription,
+            # "index": self._message_turn_counter
+        })
+        
+        # TODO: add clean up the counter when messages are cleaned up
 
-    # Store transcription
-    transcriptions = transcriptions or []
-    transcriptions.append({
-        "role": "user",
-        "text": transcription,
-        "index": message_index
-    })
-    
-    return history, None, transcriptions
+    def _generate_bot_audio_response(self):
+        # Get user's last transcription
+        user_transcription = self._transcriptions[-1]["text"]
+        
+        # Generate assistant response text
+        assistant_response_text = self.language_partner.get_response(user_transcription)
 
-def generate_response(history, transcriptions):
-    """Generate bot audio response"""
-    if not history or not transcriptions:
-        return history, transcriptions
-    
-    # Get user's last transcription
-    user_transcription = transcriptions[-1]["text"]
-    
-    # Generate response text
-    response_text = generate_response_text(user_transcription)
-    
-    # Generate audio response
-    response_audio_file = generate_audio_response(response_text)
-    
-    message_index = len(history)
-    
-    # Add identifier to the message
-    history.append({
-    "role": "assistant",
-    "content": f"🤖 Assistant Audio Message #{message_index + 1}"
-    })
+        # Generate assistant response text
+        audio_response = self.audio_processor.text_to_speech(assistant_response_text)
+        
+        # save assistant audio in temp file
+        filename = f"{self.temp_dir}/assistant_audio_{self._message_turn_counter}.mp3"
+        self.audio_processor.save_audio_to_file(audio_data=audio_response,
+                                                            filename=filename)
 
-    history.append({
+        # Add identifier to the message
+        self._history.append({
         "role": "assistant",
-        "content": {
-            "path": response_audio_file,
-        }
-    })
-    
-    # Store assistant transcription
-    transcriptions.append({
-        "role": "assistant",
-        "text": response_text,
-        "index": message_index
-    })
-    
-    return history, transcriptions
+        "content": f"🤖 Assistant Audio Message #{self._message_turn_counter}"
+        })
 
-def format_transcriptions(transcriptions, show_transcriptions):
-    """Format transcriptions for display"""
-    if not show_transcriptions or not transcriptions:
-        return ""
-    
-    formatted = "## 📝 Transcriptions\n\n"
-    for i, trans in enumerate(transcriptions):
-        role_emoji = "🎤" if trans["role"] == "user" else "🤖"
-        role_name = "User" if trans["role"] == "user" else "Assistant"
-        formatted += f"**{role_emoji} {role_name} Audio Message #{trans['index'] + 1}**\n\n"
-        formatted += f"{trans['text']}\n\n"
-        formatted += "---\n\n"
-    
-    return formatted
+        self._history.append({
+            "role": "assistant",
+            "content": {
+                "path": filename,
+            }
+        })
+        
+        # Store assistant transcription
+        self._transcriptions.append({
+            "role": "assistant",
+            "text": assistant_response_text,
+            # "index": message_index
+        })
+        
+    def process_conversation_turn(self, audio):
+        """Process a full conversation turn: user audio and bot response audio"""
 
+        # Process user audio message
+        self._process_user_audio_message(audio)
+        self._generate_bot_audio_response()
+
+        # Generate response audio
+        self._message_turn_counter += 1
+
+    def clear_all(self):
+        self._history = []
+        self._transcriptions = []
+        self.language_partner.reset_conversation()
+        
+        self._message_turn_counter = 1
+
+        print("Cleared all conversation history (llm and gradio) and transcriptions.")
+        return empty_transcription_message
+
+    def _format_transcriptions(self):
+        """Format transcriptions for display"""
+
+        if not self.show_transcriptions_state or not self.transcriptions_state:
+            return ""
+        
+        formatted = "## 📝 Transcriptions\n\n"
+        for i, trans in enumerate(self.transcriptions_state):
+            role_emoji = "🎤" if trans["role"] == "user" else "🤖"
+            role_name = "User" if trans["role"] == "user" else "Assistant"
+            formatted += f"**{role_emoji} {role_name} Audio Message #{trans['index'] + 1}**\n\n"
+            formatted += f"{trans['text']}\n\n"
+            formatted += "---\n\n"
+        
+        return formatted
+
+    def toggle_transcriptions(self):
+        # Toggle transcription panel visibility
+
+        button_text = "Hide Transcriptions" if self.show_transcriptions_state else "Show Transcriptions"
+        transcription_text = self._format_transcriptions()
+        if not transcription_text:
+            transcription_text = empty_transcription_message
+        
+        # transcription_col, transcribe_toggle, transcription_display
+        return (
+            gr.update(visible=self.show_transcriptions_state),
+            button_text,
+            transcription_text
+        )
+
+    def handle_audio_submit(self, audio_filepath):
+        # Handle audio submission
+        if audio_filepath is None:
+            return self._format_transcriptions()
+        
+        with open(audio_filepath, "rb") as f:
+            audio = f.read()
+            self.process_conversation_turn(audio)
+
+        # Update transcription display
+        transcription_display = self._format_transcriptions()
+        print("Updated transcription display.=============================")
+        print(transcription_display)
+        print("=========================================================")
+        
+        if not transcription_display:
+            transcription_display = empty_transcription_message
+        
+        return transcription_display
 
 with gr.Blocks(css=css) as demo:
     gr.Markdown("# 🎙️ Audio Chat with Transcriptions Panel")
     
+    integrated_chat = IntegratedAudioChat()
     # Store transcriptions in state
-    transcriptions_state = gr.State([])
-    show_transcriptions_state = gr.State(False)
+    # transcriptions_state = gr.State([])
+    # show_transcriptions_state = gr.State(False)
     
     with gr.Row():
         # Main chat area
@@ -186,7 +208,7 @@ with gr.Blocks(css=css) as demo:
             with gr.Row():
                 audio_input = gr.Audio(
                     sources=["microphone", "upload"],
-                    type="numpy",
+                    type="filepath",
                     label="Record or Upload Audio"
                 )
             
@@ -203,61 +225,24 @@ with gr.Blocks(css=css) as demo:
                 label="Transcriptions"
             )
 
-    # Toggle transcription panel visibility
-    def toggle_transcriptions(show_state, transcriptions):
-        new_state = not show_state
-        button_text = "Hide Transcriptions" if new_state else "Show Transcriptions"
-        transcription_text = format_transcriptions(transcriptions, new_state)
-        if not transcription_text:
-            transcription_text = empty_transcription_message
-        
-        return (
-            new_state,
-            gr.update(visible=new_state),
-            button_text,
-            transcription_text
-        )
-
+    # refactored
     transcribe_toggle.click(
-        toggle_transcriptions,
-        inputs=[show_transcriptions_state, transcriptions_state],
-        outputs=[show_transcriptions_state, transcription_col, transcribe_toggle, transcription_display]
+        integrated_chat.toggle_transcriptions,
+        inputs=[],
+        outputs=[transcription_col, transcribe_toggle, transcription_display]
     )
 
     # Handle audio submission
-    def handle_audio_submit(audio, history, transcriptions, show_state):
-        if audio is None:
-            return history, None, transcriptions, format_transcriptions(transcriptions, show_state)
-        
-        # Add user audio
-        history, _, transcriptions = process_audio_message(audio, history, transcriptions)
-        # Generate bot response
-        history, transcriptions = generate_response(history, transcriptions)
-        
-        # Update transcription display
-        transcription_text = format_transcriptions(transcriptions, show_state)
-        if not transcription_text:
-            transcription_text = empty_transcription_message
-        
-        return history, None, transcriptions, transcription_text
-
     send_btn.click(
-        handle_audio_submit,
-        inputs=[audio_input, chatbot, transcriptions_state, show_transcriptions_state],
-        outputs=[chatbot, audio_input, transcriptions_state, transcription_display]
+    integrated_chat.handle_audio_submit,
+    inputs=[audio_input],
+    outputs=[transcription_display]
     )
-
-    # Removed auto-submit on recording stop
-
-    # Clear chat
-    def clear_all():
-        return [], None, [], empty_transcription_message
 
     clear_btn.click(
-        clear_all,
-        outputs=[chatbot, audio_input, transcriptions_state, transcription_display]
+        integrated_chat.clear_all,
+        outputs=[transcription_display]
     )
-
 
 
 if __name__ == "__main__":

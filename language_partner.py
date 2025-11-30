@@ -56,7 +56,7 @@ class LanguagePartner():
         self.chat_history.clear()
         
     def _simulate_conversation(self):
-        tutor = PracticeConversation()
+        tutor = LanguagePartner()
 
         # Simulate conversation
         print("=== Starting Conversation ===\n")
