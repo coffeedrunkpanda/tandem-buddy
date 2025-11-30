@@ -1,13 +1,10 @@
 import os
-import sys
-# import numpy as np
 import gradio as gr
 
 from audio_processing import AudioProcessing
 from language_partner import LanguagePartner
 
 
-# TODO: fix message counter for user and assistant messages
 # Custom CSS for layout
 css = """
 .transcription-panel {
@@ -37,12 +34,11 @@ class IntegratedAudioChat:
 
         self._history = []
 
-        # Transcriptions 
+        # Transcriptions list (Actual data storage)
         self._transcriptions = []
 
-        # Toggle transcriptions state? 
-        self.transcriptions_state = gr.State([])
-        self.show_transcriptions_state = gr.State(False)
+        # UI State flags
+        self.show_transcriptions = False 
             
 
     def _process_user_audio_message(self, audio):
@@ -76,10 +72,9 @@ class IntegratedAudioChat:
         self._transcriptions.append({
             "role": "user",
             "text": transcription,
-            # "index": self._message_turn_counter
+            "index": self._message_turn_counter
         })
         
-        # TODO: add clean up the counter when messages are cleaned up
 
     def _generate_bot_audio_response(self):
         # Get user's last transcription
@@ -113,7 +108,7 @@ class IntegratedAudioChat:
         self._transcriptions.append({
             "role": "assistant",
             "text": assistant_response_text,
-            # "index": message_index
+            "index": self._message_turn_counter
         })
         
     def process_conversation_turn(self, audio):
@@ -134,19 +129,22 @@ class IntegratedAudioChat:
         self._message_turn_counter = 1
 
         print("Cleared all conversation history (llm and gradio) and transcriptions.")
-        return empty_transcription_message
+        # Return empty list to clear Chatbot, and empty string for markdown
+        return [], empty_transcription_message
 
     def _format_transcriptions(self):
         """Format transcriptions for display"""
-
-        if not self.show_transcriptions_state or not self.transcriptions_state:
+    
+        if not self.show_transcriptions or not self._transcriptions:
             return ""
         
         formatted = "## 📝 Transcriptions\n\n"
-        for i, trans in enumerate(self.transcriptions_state):
+        
+        for i, trans in enumerate(self._transcriptions):
             role_emoji = "🎤" if trans["role"] == "user" else "🤖"
             role_name = "User" if trans["role"] == "user" else "Assistant"
-            formatted += f"**{role_emoji} {role_name} Audio Message #{trans['index'] + 1}**\n\n"
+            idx = trans.get('index', i + 1)
+            formatted += f"**{role_emoji} {role_name} Audio Message #{idx}**\n\n"
             formatted += f"{trans['text']}\n\n"
             formatted += "---\n\n"
         
@@ -154,15 +152,18 @@ class IntegratedAudioChat:
 
     def toggle_transcriptions(self):
         # Toggle transcription panel visibility
+        
+        # CHANGED: Update internal boolean
+        self.show_transcriptions = not self.show_transcriptions
 
-        button_text = "Hide Transcriptions" if self.show_transcriptions_state else "Show Transcriptions"
+        button_text = "Hide Transcriptions" if self.show_transcriptions else "Show Transcriptions"
+        
         transcription_text = self._format_transcriptions()
-        if not transcription_text:
+        if not transcription_text and self.show_transcriptions:
             transcription_text = empty_transcription_message
         
-        # transcription_col, transcribe_toggle, transcription_display
         return (
-            gr.update(visible=self.show_transcriptions_state),
+            gr.update(visible=self.show_transcriptions),
             button_text,
             transcription_text
         )
@@ -170,7 +171,7 @@ class IntegratedAudioChat:
     def handle_audio_submit(self, audio_filepath):
         # Handle audio submission
         if audio_filepath is None:
-            return self._format_transcriptions()
+            return self._history, self._format_transcriptions(), audio_filepath
         
         with open(audio_filepath, "rb") as f:
             audio = f.read()
@@ -178,22 +179,17 @@ class IntegratedAudioChat:
 
         # Update transcription display
         transcription_display = self._format_transcriptions()
-        print("Updated transcription display.=============================")
-        print(transcription_display)
-        print("=========================================================")
         
-        if not transcription_display:
+        if not transcription_display and self.show_transcriptions:
             transcription_display = empty_transcription_message
         
-        return transcription_display
+        # Return History (for chatbot), Transcription (for panel), and None (to clear audio input)
+        return self._history, transcription_display, None
 
 with gr.Blocks(css=css) as demo:
     gr.Markdown("# 🎙️ Audio Chat with Transcriptions Panel")
     
     integrated_chat = IntegratedAudioChat()
-    # Store transcriptions in state
-    # transcriptions_state = gr.State([])
-    # show_transcriptions_state = gr.State(False)
     
     with gr.Row():
         # Main chat area
@@ -204,7 +200,6 @@ with gr.Blocks(css=css) as demo:
                 height=500
             )
 
-            # TODO: investigate using type="filepath" for audio input
             with gr.Row():
                 audio_input = gr.Audio(
                     sources=["microphone", "upload"],
@@ -216,7 +211,6 @@ with gr.Blocks(css=css) as demo:
                 send_btn = gr.Button("Send Audio", variant="primary", scale=1)
                 clear_btn = gr.Button("Clear Chat", scale=1)
                 transcribe_toggle = gr.Button("Show Transcriptions", scale=1)
-                # TODO: Add "Feedback" button later
         
         # Transcription panel (initially hidden)
         with gr.Column(scale=1, visible=False, elem_classes="transcription-panel") as transcription_col:
@@ -225,7 +219,7 @@ with gr.Blocks(css=css) as demo:
                 label="Transcriptions"
             )
 
-    # refactored
+    # Event Listeners
     transcribe_toggle.click(
         integrated_chat.toggle_transcriptions,
         inputs=[],
@@ -234,14 +228,14 @@ with gr.Blocks(css=css) as demo:
 
     # Handle audio submission
     send_btn.click(
-    integrated_chat.handle_audio_submit,
-    inputs=[audio_input],
-    outputs=[transcription_display]
+        integrated_chat.handle_audio_submit,
+        inputs=[audio_input],
+        outputs=[chatbot, transcription_display, audio_input]
     )
 
     clear_btn.click(
         integrated_chat.clear_all,
-        outputs=[transcription_display]
+        outputs=[chatbot, transcription_display]
     )
 
 
