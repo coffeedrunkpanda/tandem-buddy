@@ -3,25 +3,31 @@ requires = ["setuptools>=61.0.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "tandem-buddy-app"
+name = "tandem-buddy"
 version = "0.1.0"
-description = "Blob"
+description = "A buddy to practice speaking in your target language and receive some gentle feedback."
 authors = [
-    {name = "Your Name", email = "you@example.com"},
+    {name = "coffeedrunkpanda", email = "you@example.com"},
 ]
 license = {text = "MIT"}
 readme = "README.md"
-requires-python = ">=3.11" # Specify your minimum Python version
+requires-python = ">=3.12" # Specify your minimum Python version
 
 # Core dependencies (equivalent to [tool.poetry.dependencies])
 dependencies = [
-    "gradio>=6.0",
-    "numpy>=1.24",
-    "soundfile>=0.12",
-    "librosa>=0.10",
+    "gradio==5.50.0",
+    "langchain==1.1.0",
+    "langchain-openai==1.1.0",
+    "langchain-community==0.4.1",
+    "elevenlabs==2.24.0",
+    "dotenv",
+
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest",       # Testing framework
 ]
+
+[tool.setuptools]
+packages = {find = {exclude = ["temp_data*"]}}

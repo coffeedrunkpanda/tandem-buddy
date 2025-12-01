@@ -5,7 +5,7 @@ FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim AS dev_base
 WORKDIR /app
 
 # Copy dependency files only for initial installation
-COPY pyproject.toml .
+COPY . .
 
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --no-dev
