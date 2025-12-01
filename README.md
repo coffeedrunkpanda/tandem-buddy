@@ -2,6 +2,14 @@
 
 A voice-based language learning companion that helps you practice speaking Spanish through natural conversations, just like chatting with a friend through audios on WhatsApp.
 
+## Screenshot
+
+Interface and transcriptions available. The image shows an example of light feedback.
+![Tandem Buddy Interface](assets/light_feedback.png)
+
+Interface for the final/detailed feedback. The image shows an example of the detailed feedback.
+![Tandem Buddy Detailed Feedback](assets/detailed_feedback.png)
+
 ## What is Tandem Buddy?
 
 Tandem Buddy is an AI-powered language practice app that simulates real conversations in Spanish. Unlike traditional language apps, it focuses purely on speaking practice.
@@ -61,9 +69,9 @@ Future improvements planned:
 ## Getting Started
 
 Launch the app using:
-- [docker compose](###docker-compose)
-- [dockerfile](###using-docker-container)
-- [local](###local-env)
+- [docker compose](#docker-compose)
+- [dockerfile](#using-docker-container)
+- [local](#local-env)
 
 ### Docker compose
 `docker-compose up`

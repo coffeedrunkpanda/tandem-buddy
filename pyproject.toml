@@ -7,7 +7,7 @@ name = "tandem-buddy"
 version = "0.1.0"
 description = "A buddy to practice speaking in your target language and receive some gentle feedback."
 authors = [
-    {name = "coffeedrunkpanda", email = "you@example.com"},
+    {name = "Anne Valvezan (coffeedrunkpanda)", email = "coffeedrunkpanda.studio@gmail.com"},
 ]
 license = {text = "MIT"}
 readme = "README.md"
