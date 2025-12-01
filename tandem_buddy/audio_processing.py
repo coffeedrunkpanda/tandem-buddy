@@ -5,15 +5,23 @@ from dotenv import load_dotenv
 
 from .utils import running_from_docker_container
 
-# TODO: add transcription params to the .env file
-
 class AudioProcessing():
+    """A Class for handling audio processing with ElevenLabs API and saving audio files.
+
+    This class encapsulates methods for converting speech to text and text to speech,
+    and provides a flexible method to accept audio data in various formats,
+    including a complete bytes object or a generator that yields chunks of bytes,
+    and writes them to a specified file path efficiently.
+    """
 
     def __init__(self) -> None:
-    
-        print("Initializing AudioProcessing with ElevenLabs API...")
-        print("Running from Docker container:", running_from_docker_container())
-        
+        """Initialize ElevenLabs client with API key and voice ID from environment variables.
+
+        Raises:
+            ValueError: ELEVENLABS_API_KEY not found
+            ValueError: ELEVENLABS_VOICE_ID not found
+        """        
+
         if not running_from_docker_container():
             load_dotenv()
             api_key = os.getenv("ELEVENLABS_API_KEY")
@@ -40,8 +48,15 @@ class AudioProcessing():
             "voice_id": voice_id
         }
 
-    def speech_to_text(self, audio_data)-> str:
-        """Transcribe audio to text with elevenlabs"""
+    def speech_to_text(self, audio_data:bytes)-> str:
+        """Convert speech to text with elevenlabs
+
+        Args:
+            audio_data (bytes): Audio data in bytes format.
+
+        Returns:
+            str: Transcribed text.
+        """        
         
         if audio_data is None:
             return None        
@@ -54,8 +69,15 @@ class AudioProcessing():
         
         return transcription.text
 
-    def text_to_speech(self, text):
-        """Convert text to speech with elevenlabs"""
+    def text_to_speech(self, text:str)-> types.GeneratorType:
+        """Convert text to speech with elevenlabs.
+
+        Args:
+            text (str): Input text to convert to speech.
+
+        Returns:
+            types.GeneratorType: Audio data in chunks.
+        """        
         
         audio = self._client.text_to_dialogue.convert(
             inputs=[
@@ -68,7 +90,16 @@ class AudioProcessing():
 
         return audio
 
-    def save_audio_to_file(self, audio_data, filename) -> None:
+    def save_audio_to_file(self, audio_data:bytes | types.GeneratorType, filename:str) -> None:
+        """Save audio data to a file.
+
+        Args:
+            audio_data (bytes | types.GeneratorType): Audio data in bytes or generator format.
+            filename (str): Path to save the audio file.
+
+        Returns:
+            None: The function does not return anything.
+        """        
         if audio_data is None:
             return None
 

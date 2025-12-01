@@ -14,8 +14,19 @@ from .utils import running_from_docker_container
 # Tandem Buddy Language Partner Class        
 class LanguagePartner():
 
-    def __init__(self, model_name ="gpt-4o-mini", system_prompt=system_prompt) -> None:
-        
+    def __init__(self, model_name:str ="gpt-4o-mini", system_prompt:str=system_prompt) -> None:
+        """Initialize the Language Partner class.
+
+        The constructor sets up the chat model, message history, and conversation chain.
+
+        Args:
+            model_name (str, optional): OpenAI model name. Defaults to "gpt-4o-mini".
+            system_prompt (str, optional): System Prompt used as imput for the model.
+             Defaults to system_prompt.
+
+        Raises:
+            ValueError: OPENAI_API_KEY not found
+        """        
         if not running_from_docker_container():
             load_dotenv()
             api_key = os.getenv("OPENAI_API_KEY")
@@ -48,6 +59,14 @@ class LanguagePartner():
         )
 
     def get_response(self, user_input: str) -> str:
+        """Get the model's response to user input.
+
+        Args:
+            user_input (str): The transcript of the user's input message.
+
+        Returns:
+            str: The model's response to the user's input in text format.
+        """        
         response = self.conversation_chain.invoke(
             {"input": user_input},
             config={"configurable": {"session_id": "default"}}
@@ -55,12 +74,25 @@ class LanguagePartner():
         return response
     
     def get_detailed_feedback(self):
+        """Provide detailed feedback on the user's performance
+        during the conversation.
+
+        Returns:
+            str: Detailed feedback on the conversation so far.
+        """        
         return self.get_response(feedback_request_prompt)
     
     def reset_conversation(self):
+        """Reset the conversation history.
+        """        
         self.chat_history.clear()
         
     def _simulate_conversation(self):
+        """Example method to simulate a conversation with the Language Partner.
+
+        This method demonstrates how to interact with the LanguagePartner class
+        by simulating a conversation and requesting feedback, and tests the functionality.
+        """        
         tutor = LanguagePartner()
 
         # Simulate conversation

@@ -4,6 +4,10 @@ import pathlib
 DOCKER_ENV_MARKER = "/.dockerenv"
 
 def running_from_docker_container() -> bool:
-    """Check if the code is running inside a Docker container."""
+    """Check if the code is running inside a Docker container.
+
+    Returns:
+        bool: True if running inside a Docker container, False otherwise.
+    """    
     return pathlib.Path(DOCKER_ENV_MARKER).exists()
 
