@@ -16,8 +16,14 @@ css = """
 .main-chat {
     padding-right: 20px;
 }
+.feedback-section {
+    margin-top: 20px;
+    padding: 15px;
+    border-radius: 8px;
+}
 """
 
+header_md = "# 🎙️ Tandem Buddy"
 empty_transcription_message = "## 📝 Transcriptions\n\nNo messages yet."
 
 class IntegratedAudioChat:
@@ -125,16 +131,24 @@ class IntegratedAudioChat:
         self._history = []
         self._transcriptions = []
         self.language_partner.reset_conversation()
+
+        # Clear temp files
+        for filename in os.listdir(self.temp_dir):
+            file_path = os.path.join(self.temp_dir, filename)
+            try:
+                if os.path.isfile(file_path):
+                    os.unlink(file_path)
+            except Exception as e:
+                print(f"Error deleting file {file_path}: {e}")
         
         self._message_turn_counter = 1
 
-        print("Cleared all conversation history (llm and gradio) and transcriptions.")
-        # Return empty list to clear Chatbot, and empty string for markdown
-        return [], empty_transcription_message
+        # Return empty list for Chatbot, empty string for transcriptions, and empty string for feedback
+        return [], empty_transcription_message, ""
 
     def _format_transcriptions(self):
         """Format transcriptions for display"""
-    
+        
         if not self.show_transcriptions or not self._transcriptions:
             return ""
         
@@ -153,7 +167,6 @@ class IntegratedAudioChat:
     def toggle_transcriptions(self):
         # Toggle transcription panel visibility
         
-        # CHANGED: Update internal boolean
         self.show_transcriptions = not self.show_transcriptions
 
         button_text = "Hide Transcriptions" if self.show_transcriptions else "Show Transcriptions"
@@ -168,6 +181,17 @@ class IntegratedAudioChat:
             transcription_text
         )
 
+    def generate_feedback(self):
+        """Generate feedback for the conversation based on transcriptions"""
+        if not self._transcriptions:
+            return "## ⚠️ No conversation to analyze yet."
+        
+        feedback = "## 📊 Final Conversation Feedback\n\n"
+        feedback += f"**Total Interactions:** {self._message_turn_counter} turns\n\n"    
+        feedback+=self.language_partner.get_detailed_feedback()
+        
+        return feedback
+
     def handle_audio_submit(self, audio_filepath):
         # Handle audio submission
         if audio_filepath is None:
@@ -179,7 +203,7 @@ class IntegratedAudioChat:
 
         # Update transcription display
         transcription_display = self._format_transcriptions()
-        
+
         if not transcription_display and self.show_transcriptions:
             transcription_display = empty_transcription_message
         
@@ -187,7 +211,7 @@ class IntegratedAudioChat:
         return self._history, transcription_display, None
 
 with gr.Blocks(css=css) as demo:
-    gr.Markdown("# 🎙️ Audio Chat with Transcriptions Panel")
+    gr.Markdown(header_md)
     
     integrated_chat = IntegratedAudioChat()
     
@@ -211,6 +235,11 @@ with gr.Blocks(css=css) as demo:
                 send_btn = gr.Button("Send Audio", variant="primary", scale=1)
                 clear_btn = gr.Button("Clear Chat", scale=1)
                 transcribe_toggle = gr.Button("Show Transcriptions", scale=1)
+                feedback_btn = gr.Button("Get Final Feedback", variant="secondary", scale=1)
+            
+            # Feedback Section
+            with gr.Row(visible=True) as feedback_row:
+                feedback_display = gr.Markdown(elem_classes="feedback-section")
         
         # Transcription panel (initially hidden)
         with gr.Column(scale=1, visible=False, elem_classes="transcription-panel") as transcription_col:
@@ -233,9 +262,17 @@ with gr.Blocks(css=css) as demo:
         outputs=[chatbot, transcription_display, audio_input]
     )
 
+    # Feedback Button
+    feedback_btn.click(
+        integrated_chat.generate_feedback,
+        inputs=[],
+        outputs=[feedback_display]
+    )
+
+    # Clear everything including feedback
     clear_btn.click(
         integrated_chat.clear_all,
-        outputs=[chatbot, transcription_display]
+        outputs=[chatbot, transcription_display, feedback_display]
     )
 
 
