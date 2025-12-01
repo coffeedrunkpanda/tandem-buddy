@@ -9,7 +9,7 @@ description = "A buddy to practice speaking in your target language and receive 
 authors = [
     {name = "Anne Valvezan (coffeedrunkpanda)", email = "coffeedrunkpanda.studio@gmail.com"},
 ]
-license = {text = "MIT"}
+license = {text = "CC BY-NC 4.0"}
 readme = "README.md"
 requires-python = ">=3.12" # Specify your minimum Python version
 
