@@ -3,7 +3,7 @@ import types
 from elevenlabs.client import ElevenLabs
 from dotenv import load_dotenv 
 
-load_dotenv()
+from .utils import running_from_docker_container
 
 # TODO: add transcription params to the .env file
 
@@ -11,8 +11,17 @@ class AudioProcessing():
 
     def __init__(self) -> None:
     
-        api_key = os.getenv("ELEVENLABS_API_KEY")
-        voice_id = os.getenv("ELEVENLABS_VOICE_ID")
+        print("Initializing AudioProcessing with ElevenLabs API...")
+        print("Running from Docker container:", running_from_docker_container())
+        
+        if not running_from_docker_container():
+            load_dotenv()
+            api_key = os.getenv("ELEVENLABS_API_KEY")
+            voice_id = os.getenv("ELEVENLABS_VOICE_ID")
+        else:
+            api_key = os.environ.get("ELEVENLABS_API_KEY")
+            voice_id = os.environ.get("ELEVENLABS_VOICE_ID") 
+
 
         if not api_key:
             raise ValueError("ELEVENLABS_API_KEY not found")

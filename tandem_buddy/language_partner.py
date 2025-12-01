@@ -1,21 +1,26 @@
 import os
+from dotenv import load_dotenv 
+
 from langchain_openai import ChatOpenAI
 from langchain_community.chat_message_histories import ChatMessageHistory
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.runnables.history import RunnableWithMessageHistory
 from langchain_core.output_parsers import StrOutputParser
 
-from prompts import system_prompt, feedback_request_prompt
-
-from dotenv import load_dotenv 
-load_dotenv()
+from .prompts import system_prompt, feedback_request_prompt
+from .utils import running_from_docker_container
 
 
 # Tandem Buddy Language Partner Class        
 class LanguagePartner():
 
     def __init__(self, model_name ="gpt-4o-mini", system_prompt=system_prompt) -> None:
-        api_key = os.getenv("OPENAI_API_KEY")
+        
+        if not running_from_docker_container():
+            load_dotenv()
+            api_key = os.getenv("OPENAI_API_KEY")
+        else:
+            api_key = os.environ.get("OPENAI_API_KEY")
 
         if not api_key:
             raise ValueError("OPENAI_API_KEY not found")
