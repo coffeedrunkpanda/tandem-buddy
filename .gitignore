@@ -210,3 +210,4 @@ __marimo__/
 temp/
 tmp/
 temp_data/
+.DS_Store
